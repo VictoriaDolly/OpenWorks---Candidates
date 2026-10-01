@@ -9,10 +9,8 @@ import { demoApi } from './demo.js';
 const app = document.getElementById('app');
 
 // Rescue: a Supabase magic link that landed on the site root belongs to the admin.
-if (/(^|[#&])(access_token|error_code)=/.test(location.hash) && !new URLSearchParams(location.search).get('p')) {
-  location.replace('/admin/' + location.hash);
-  throw new Error('redirecting to admin');
-}
+const isAuthRedirect = /(^|[#&])(access_token|error_code)=/.test(location.hash) && !new URLSearchParams(location.search).get('p');
+if (isAuthRedirect) location.replace('/admin/' + location.hash);
 
 const slug = (new URLSearchParams(location.search).get('p') || '').trim();
 const unlockKey = `ow_unlock_${slug}`;
@@ -187,4 +185,4 @@ async function start() {
   }
 }
 
-start();
+if (!isAuthRedirect) start();
