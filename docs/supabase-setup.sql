@@ -1,7 +1,7 @@
 -- =====================================================================
 -- OpenWorks Candidates — Supabase setup
 -- Paste this whole file ONCE in Supabase → SQL Editor → New query → Run.
--- Before running: replace ADMIN-EMAIL-HERE (line ~12) with the admin email.
+-- Admin email is set below (add more later with: insert into admins (email) values ('x@y.com');)
 -- =====================================================================
 
 -- ============ ADMINS ============
@@ -9,7 +9,7 @@ create table admins (
   email text primary key,
   added_at timestamptz default now()
 );
-insert into admins (email) values (lower('ADMIN-EMAIL-HERE'));
+insert into admins (email) values (lower('danvicmed@gmail.com'));
 
 create or replace function is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
