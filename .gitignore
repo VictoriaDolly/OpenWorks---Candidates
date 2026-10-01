@@ -1,0 +1,6 @@
+# Local / personal settings
+.claude/settings.local.json
+.vercel/
+.DS_Store
+Thumbs.db
+desktop.ini
