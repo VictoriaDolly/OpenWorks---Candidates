@@ -17,8 +17,11 @@ while ($listener.IsListening) {
   $res = $ctx.Response
   try {
     $rel = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath).TrimStart('/')
-    $path = [IO.Path]::GetFullPath((Join-Path $root $rel))
-    if (-not $path.StartsWith($root)) { throw 'outside root' }
+    $base = $root
+    # Dev-only helpers (e.g. the Supabase simulator) live in tools/ and are served under /__dev/
+    if ($rel.StartsWith('__dev/')) { $base = $PSScriptRoot; $rel = $rel.Substring(6) }
+    $path = [IO.Path]::GetFullPath((Join-Path $base $rel))
+    if (-not $path.StartsWith($base)) { throw 'outside root' }
     if (Test-Path $path -PathType Container) {
       if (-not $ctx.Request.Url.AbsolutePath.EndsWith('/')) {
         $res.StatusCode = 308; $res.RedirectLocation = $ctx.Request.Url.AbsolutePath + '/' + $ctx.Request.Url.Query
@@ -29,6 +32,16 @@ while ($listener.IsListening) {
     if (Test-Path $path -PathType Leaf) {
       $bytes = [IO.File]::ReadAllBytes($path)
       $ext = [IO.Path]::GetExtension($path).ToLower()
+      # Test mode (cookie ow_mock=1): point config.js at the in-browser Supabase simulator.
+      if ($ctx.Request.Cookies['ow_mock'] -and $base -eq $root -and ($rel -eq 'js/config.js' -or $ext -eq '.html')) {
+        $text = [Text.Encoding]::UTF8.GetString($bytes)
+        if ($rel -eq 'js/config.js') {
+          $text = $text.Replace("SUPABASE_URL = '';", "SUPABASE_URL = 'https://mock.supabase.co';").Replace("SUPABASE_ANON_KEY = '';", "SUPABASE_ANON_KEY = 'mock-anon-key';")
+        } elseif ($ext -eq '.html') {
+          $text = $text.Replace('<script type="module"', '<script type="module" src="/__dev/mock-supabase.js"></script><script type="module"')
+        }
+        $bytes = [Text.Encoding]::UTF8.GetBytes($text)
+      }
       $res.ContentType = $(if ($types[$ext]) { $types[$ext] } else { 'application/octet-stream' })
       $res.Headers.Add('Cache-Control', 'no-store')
       $res.OutputStream.Write($bytes, 0, $bytes.Length)
