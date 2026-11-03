@@ -5,7 +5,7 @@
 const ADMIN = 'admin@example.com';
 const OTHER = 'other@example.com'; // a real user who is NOT in the admins table
 const TOKENS = { 'mock-admin-token': ADMIN, 'mock-other-token': OTHER };
-const STAGES = ['Submitted', 'Client Interviews', 'On-Hold', 'Offer', 'Rejected'];
+const STAGES = ['general', 'Submitted', 'Client Interviews', 'On-Hold', 'Offer', 'Rejected'];
 
 const load = () => JSON.parse(localStorage.getItem('mock_db') || '{"pipelines":[],"candidates":[],"feedback":[]}');
 const save = db => localStorage.setItem('mock_db', JSON.stringify(db));

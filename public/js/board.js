@@ -130,6 +130,11 @@ export function profileHtml(c, { t }) {
       ${consider ? `<p class="to-consider"><strong>${e(t('toConsider'))}</strong> ${e(consider)}</p>` : ''}`));
   }
 
+  const addInfo = String(c.additionalInfo || '').trim();
+  if (addInfo) {
+    sections.push(section(t('secAdditionalInfo'), `<div class="additional-info-text" style="white-space:pre-wrap;">${e(addInfo)}</div>`));
+  }
+
   const av = c.availability || {};
   const avRows = AVAILABILITY_FIELDS.filter(k => String(av[k] || '').trim())
     .map(k => `<div class="av-row"><strong>${e(t('av_' + k))}:</strong> ${e(av[k])}</div>`).join('');

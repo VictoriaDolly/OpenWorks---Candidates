@@ -42,6 +42,7 @@ create table candidates (
   overall_recommendation text,
   screening_notes jsonb default '[]',
   to_consider text,
+  additional_info text,
   availability jsonb default '{}',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -131,7 +132,7 @@ language plpgsql security definer set search_path = public as $$
 declare r feedback;
 begin
   if not pipeline_unlocked(p_slug, p_hash) then raise exception 'Not authorized' using errcode = '42501'; end if;
-  if p_stage not in ('Submitted', 'Client Interviews', 'On-Hold', 'Offer', 'Rejected') then
+  if p_stage not in ('general', 'Submitted', 'Client Interviews', 'On-Hold', 'Offer', 'Rejected') then
     raise exception 'Invalid stage';
   end if;
   if not exists (

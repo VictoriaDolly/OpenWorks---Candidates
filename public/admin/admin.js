@@ -407,7 +407,7 @@ async function candidateForm(slug, id) {
   if (id && !existing) throw new Error('Candidate not found.');
   const c = existing ? structuredClone(existing) : {
     id: uuid(), pipelineSlug: slug, name: '', location: '', email: '', linkedin: '', status: STATUSES[0],
-    resume: null, overallRecommendation: RECOMMENDATIONS[0], screeningNotes: [], toConsider: '', availability: {},
+    resume: null, overallRecommendation: RECOMMENDATIONS[0], screeningNotes: [], toConsider: '', additionalInfo: '', availability: {},
   };
   const av = c.availability || {};
   const avLabels = { motivation: 'Motivation to change', noticePeriod: 'Notice period', otherProcesses: 'Other hiring processes',
@@ -455,6 +455,7 @@ async function candidateForm(slug, id) {
           <small>Tip: pasting several lines into a bullet splits them into separate bullets.</small>
         </div>
         <label class="field"><span>To consider (optional)</span><textarea class="input" name="toConsider" rows="3" maxlength="3000">${e(c.toConsider)}</textarea></label>
+        <label class="field"><span>Additional Information (optional)</span><textarea class="input" name="additionalInfo" rows="8" style="min-height:180px; resize:vertical;">${e(c.additionalInfo || '')}</textarea></label>
       </fieldset>
 
       <fieldset>
@@ -557,6 +558,7 @@ async function candidateForm(slug, id) {
       overallRecommendation: form.overallRecommendation.value,
       screeningNotes: [...bullets.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
       toConsider: form.toConsider.value.trim(),
+      additionalInfo: form.additionalInfo.value.trim(),
       availability: Object.fromEntries(AVAILABILITY_FIELDS.map(k => [k, form[`av_${k}`].value.trim()])),
     };
     await busy(form.querySelector('[type="submit"]'), 'Saving…', async () => {

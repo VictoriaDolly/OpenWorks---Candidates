@@ -25,6 +25,7 @@ const toCandidate = r => ({
   overallRecommendation: r.overall_recommendation || '',
   screeningNotes: Array.isArray(r.screening_notes) ? r.screening_notes : [],
   toConsider: r.to_consider || '',
+  additionalInfo: r.additional_info || '',
   availability: r.availability || {},
   createdAt: r.created_at, updatedAt: r.updated_at,
 });
@@ -36,6 +37,7 @@ const candidateRow = c => ({
   overall_recommendation: c.overallRecommendation || null,
   screening_notes: (c.screeningNotes || []).map(s => String(s).trim()).filter(Boolean),
   to_consider: c.toConsider || null,
+  additional_info: c.additionalInfo || null,
   availability: cleanAvailability(c.availability),
 });
 
@@ -154,6 +156,7 @@ export function buildSnapshot(pipeline, candidates) {
       overallRecommendation: c.overallRecommendation || '',
       screeningNotes: c.screeningNotes || [],
       toConsider: c.toConsider || '',
+      additionalInfo: c.additionalInfo || '',
       availability: cleanAvailability(c.availability),
     })),
   };

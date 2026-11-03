@@ -1,8 +1,8 @@
-// Interview feedback: the only thing clients can write.
+// Client feedback: the only thing clients can write.
 // Data access goes through an "adapter" so the same UI works for the client (password-checked RPCs)
 // and the admin (read-only, signed-in REST).
-import { STATUSES, SCORES, average, escapeHtml as e, browserId, storage, supabaseFetch } from './shared.js';
-import { scorePill, toast } from './board.js';
+import { average, escapeHtml as e, browserId, storage, supabaseFetch } from './shared.js';
+import { toast } from './board.js';
 
 export class FeedbackModel {
   constructor(adapter) {
@@ -55,10 +55,11 @@ export function clientAdapter({ slug, hash }) {
 }
 
 // ---------- UI ----------
+// One note box per candidate: notes are saved with stage 'general' and shown in chronological order.
+const FEEDBACK_STAGE = 'general';
+
 export function mountFeedback(el, model, candidate, { t, locale = 'en' }) {
-  const state = { open: new Set(), drafts: {} };
-  // Stages that already have notes start open.
-  STATUSES.forEach(s => { if (model.forCandidate(candidate.id).some(n => n.stage === s)) state.open.add(s); });
+  const state = { draft: '' };
 
   const fmtDate = iso => {
     try { return new Date(iso).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' }); }
@@ -72,78 +73,36 @@ export function mountFeedback(el, model, candidate, { t, locale = 'en' }) {
       return;
     }
     const name = storage.get('ow_fb_name') || '';
-    const notes = model.forCandidate(candidate.id);
+    const notes = model.forCandidate(candidate.id)
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
     el.innerHTML = `
       <section class="profile-section">
         <h3>${e(t('secFeedback'))}</h3>
-        ${STATUSES.map(stage => {
-          const list = notes.filter(n => n.stage === stage).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
-          const avg = model.stageAvg(candidate.id, stage);
-          const draft = state.drafts[stage] || { body: '', score: null };
-          return `
-          <details class="fb-stage" data-stage="${e(stage)}"${state.open.has(stage) ? ' open' : ''}>
-            <summary>
-              <span class="fb-arrow" aria-hidden="true">▾</span>
-              <span class="fb-stage-name">${e(stage)}</span>
-              <span class="fb-count">${list.length ? e(list.length === 1 ? t('fbNotesOne') : t('fbNotesMany', { n: list.length })) : ''}</span>
-              ${scorePill(avg, t, { withLabel: true })}
-            </summary>
-            <div class="fb-body">
-              ${list.length ? list.map(n => `
-                <div class="fb-note">
-                  <div class="fb-meta">
-                    <strong>${e(n.author || t('fbAnonymous'))}</strong>
-                    <span class="muted">${e(fmtDate(n.created_at))}</span>
-                    ${n.score ? `<span class="score-chip score-${n.score}">${n.score} · ${e(t('score_' + n.score))}</span>` : ''}
-                    ${model.canWrite && n.mine ? `<button type="button" class="fb-delete" data-del="${e(n.id)}" title="${e(t('fbDelete'))}" aria-label="${e(t('fbDelete'))}">🗑</button>` : ''}
-                  </div>
-                  <p class="fb-text">${e(n.body)}</p>
-                </div>`).join('') : `<p class="muted fb-empty">${e(t('fbEmpty'))}</p>`}
-              ${model.canWrite ? `
-                <form class="fb-form" data-stage="${e(stage)}">
-                  <input class="input" name="author" maxlength="80" placeholder="${e(t('fbYourName'))}" value="${e(name)}" autocomplete="name">
-                  <textarea class="input" name="body" rows="3" maxlength="4000" placeholder="${e(t('fbPlaceholder'))}">${e(draft.body)}</textarea>
-                  <div class="fb-scores" role="group" aria-label="${e(t('fbScore'))}">
-                    ${SCORES.map(s => `<button type="button" class="score-btn score-${s}${draft.score === s ? ' is-selected' : ''}" data-score="${s}" aria-pressed="${draft.score === s}">${s} · ${e(t('score_' + s))}</button>`).join('')}
-                  </div>
-                  <div class="fb-actions"><button type="submit" class="btn btn-primary">${e(t('fbSave'))}</button></div>
-                </form>` : ''}
+        ${notes.length ? notes.map(n => `
+          <div class="fb-note">
+            <div class="fb-meta">
+              <strong>${e(n.author || t('fbAnonymous'))}</strong>
+              <span class="muted">${e(fmtDate(n.created_at))}</span>
+              ${model.canWrite && n.mine ? `<button type="button" class="fb-delete" data-del="${e(n.id)}" title="${e(t('fbDelete'))}" aria-label="${e(t('fbDelete'))}">🗑</button>` : ''}
             </div>
-          </details>`;
-        }).join('')}
+            <p class="fb-text">${e(n.body)}</p>
+          </div>`).join('') : `<p class="muted fb-empty">${e(t('fbEmpty'))}</p>`}
+        ${model.canWrite ? `
+          <form class="fb-form">
+            <input class="input" name="author" maxlength="80" placeholder="${e(t('fbYourName'))}" value="${e(name)}" autocomplete="name">
+            <textarea class="input" name="body" rows="4" maxlength="4000" placeholder="${e(t('fbPlaceholder'))}">${e(state.draft)}</textarea>
+            <div class="fb-actions"><button type="submit" class="btn btn-primary">${e(t('fbSave'))}</button></div>
+          </form>` : ''}
       </section>`;
   }
 
-  el.addEventListener('toggle', ev => {
-    const d = ev.target.closest?.('details.fb-stage');
-    if (!d) return;
-    d.open ? state.open.add(d.dataset.stage) : state.open.delete(d.dataset.stage);
-  }, true);
-
   el.addEventListener('input', ev => {
-    const form = ev.target.closest('.fb-form');
-    if (!form) return;
-    const stage = form.dataset.stage;
-    if (ev.target.name === 'author') {
-      storage.set('ow_fb_name', ev.target.value);
-      el.querySelectorAll('.fb-form input[name="author"]').forEach(i => { if (i !== ev.target) i.value = ev.target.value; });
-    }
-    if (ev.target.name === 'body') (state.drafts[stage] ||= { body: '', score: null }).body = ev.target.value;
+    if (!ev.target.closest('.fb-form')) return;
+    if (ev.target.name === 'author') storage.set('ow_fb_name', ev.target.value);
+    if (ev.target.name === 'body') state.draft = ev.target.value;
   });
 
   el.addEventListener('click', async ev => {
-    const scoreBtn = ev.target.closest('.score-btn');
-    if (scoreBtn) {
-      const form = scoreBtn.closest('.fb-form');
-      const draft = (state.drafts[form.dataset.stage] ||= { body: '', score: null });
-      const s = Number(scoreBtn.dataset.score);
-      draft.score = draft.score === s ? null : s; // click again to deselect
-      form.querySelectorAll('.score-btn').forEach(b => {
-        const on = Number(b.dataset.score) === draft.score;
-        b.classList.toggle('is-selected', on); b.setAttribute('aria-pressed', on);
-      });
-      return;
-    }
     const del = ev.target.closest('[data-del]');
     if (del) {
       if (!confirm(t('fbConfirmDelete'))) return;
@@ -157,7 +116,6 @@ export function mountFeedback(el, model, candidate, { t, locale = 'en' }) {
     const form = ev.target.closest('.fb-form');
     if (!form) return;
     ev.preventDefault();
-    const stage = form.dataset.stage;
     const author = form.author.value.trim();
     const body = form.body.value.trim();
     if (!author) { toast(t('fbNeedName'), 'error'); form.author.focus(); return; }
@@ -165,9 +123,8 @@ export function mountFeedback(el, model, candidate, { t, locale = 'en' }) {
     const btn = form.querySelector('[type="submit"]');
     btn.disabled = true; btn.textContent = t('fbSaving');
     try {
-      await model.add({ candidate_id: candidate.id, stage, author, body, score: state.drafts[stage]?.score ?? null });
-      delete state.drafts[stage];
-      state.open.add(stage);
+      await model.add({ candidate_id: candidate.id, stage: FEEDBACK_STAGE, author, body, score: null });
+      state.draft = '';
       toast(t('fbSaved'));
     } catch (err) {
       btn.disabled = false; btn.textContent = t('fbSave');
