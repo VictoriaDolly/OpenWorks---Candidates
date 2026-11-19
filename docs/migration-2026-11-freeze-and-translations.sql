@@ -1,7 +1,10 @@
 -- Run once in the Supabase SQL editor on an existing project (new projects get this from supabase-setup.sql).
--- "Freeze" a pipeline: while frozen_at is set, the client link behaves exactly like a link that
--- doesn't exist (no salt, no data, no feedback). Unfreezing restores it as it was.
+-- 1) Spanish version of each candidate's notes: candidates.i18n = { "es": { screeningNotes, toConsider,
+--    additionalInfo, availability } }. The client shows it when they switch the page to ES.
+-- 2) "Freeze" a pipeline: while frozen_at is set, the client link behaves exactly like a link that
+--    doesn't exist (no salt, no data, no feedback). Unfreezing restores it as it was.
 
+alter table candidates add column if not exists i18n jsonb default '{}';
 alter table pipelines add column if not exists frozen_at timestamptz;
 
 create or replace function pipeline_salt(p_slug text) returns text

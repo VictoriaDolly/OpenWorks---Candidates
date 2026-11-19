@@ -27,6 +27,7 @@ const toCandidate = r => ({
   toConsider: r.to_consider || '',
   additionalInfo: r.additional_info || '',
   availability: r.availability || {},
+  i18n: cleanI18n(r.i18n),
   createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
@@ -39,12 +40,30 @@ const candidateRow = c => ({
   to_consider: c.toConsider || null,
   additional_info: c.additionalInfo || null,
   availability: cleanAvailability(c.availability),
+  i18n: cleanI18n(c.i18n),
 });
 
 function cleanAvailability(av = {}) {
   const out = {};
-  AVAILABILITY_FIELDS.forEach(k => { const v = String(av[k] ?? '').trim(); if (v) out[k] = v; });
+  AVAILABILITY_FIELDS.forEach(k => { const v = String(av?.[k] ?? '').trim(); if (v) out[k] = v; });
   return out;
+}
+
+// Translated notes. Only "es" for now; the main fields hold the English version.
+// Empty translations are dropped so candidates without one stay exactly as before.
+export const TRANSLATED_FIELDS = ['screeningNotes', 'toConsider', 'additionalInfo', 'availability'];
+function cleanTranslation(t = {}) {
+  const out = {};
+  const notes = (Array.isArray(t.screeningNotes) ? t.screeningNotes : []).map(s => String(s).trim()).filter(Boolean);
+  if (notes.length) out.screeningNotes = notes;
+  ['toConsider', 'additionalInfo'].forEach(k => { const v = String(t[k] ?? '').trim(); if (v) out[k] = v; });
+  const av = cleanAvailability(t.availability);
+  if (Object.keys(av).length) out.availability = av;
+  return out;
+}
+export function cleanI18n(i18n) {
+  const es = cleanTranslation(i18n?.es || {});
+  return Object.keys(es).length ? { es } : {};
 }
 
 // ---------- Pipelines ----------
@@ -166,6 +185,8 @@ export function buildSnapshot(pipeline, candidates) {
       toConsider: c.toConsider || '',
       additionalInfo: c.additionalInfo || '',
       availability: cleanAvailability(c.availability),
+      // Only added when present, so pipelines without translations don't show "Unpublished changes".
+      ...(cleanI18n(c.i18n).es ? { i18n: cleanI18n(c.i18n) } : {}),
     })),
   };
 }
@@ -199,6 +220,7 @@ const ALIASES = {
   overallRecommendation: ['overallRecommendation', 'overall_recommendation', 'recommendation', 'overall'],
   screeningNotes: ['screeningNotes', 'screening_notes', 'notes', 'screeningInterviewNotes', 'screening_interview_notes', 'highlights', 'bullets'],
   toConsider: ['toConsider', 'to_consider', 'considerations', 'concerns', 'cons'],
+  additionalInfo: ['additionalInfo', 'additional_info', 'additionalInformation', 'additional_information'],
   availability: ['availability', 'availabilityAndExpectations', 'availability_and_expectations', 'availabilityExpectations', 'expectations'],
 };
 const AV_ALIASES = {
@@ -247,7 +269,9 @@ function normalizeImported(o) {
   const notes = pick(o, ALIASES.screeningNotes);
   out.screeningNotes = (Array.isArray(notes) ? notes : String(notes || '').split(/\r?\n/))
     .map(n => String(n).replace(/^\s*[-•*·]\s*/, '').trim()).filter(Boolean);
-  out.toConsider = text(pick(o, ALIASES.toConsider)).replace(/^to consider:\s*/i, '');
+  out.toConsider = text(pick(o, ALIASES.toConsider)).replace(/^(to consider|a tener en cuenta):\s*/i, '');
+  const info = pick(o, ALIASES.additionalInfo);
+  out.additionalInfo = (Array.isArray(info) ? info.join('\n') : String(info ?? '')).trim();
   const avSrc = { ...o, ...(typeof pick(o, ALIASES.availability) === 'object' ? pick(o, ALIASES.availability) : {}) };
   out.availability = {};
   AVAILABILITY_FIELDS.forEach(k => { const v = text(pick(avSrc, AV_ALIASES[k])); if (v) out.availability[k] = v; });
@@ -255,9 +279,28 @@ function normalizeImported(o) {
   return out;
 }
 
-// Same name (case/space-insensitive) in this pipeline → update; otherwise create.
+const nameKey = n => String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+// Combines the English and Spanish imports into one list. The English JSON fills the candidate;
+// the Spanish one only provides the translated notes (matched by name, or by position if names differ).
+// With only one box filled, that one is used as is (Spanish only → also shown as the ES version).
+export function combineImports(enItems, esItems) {
+  const asEs = item => ({ i18n: { es: Object.fromEntries(TRANSLATED_FIELDS.map(k => [k, item[k]])) } });
+  if (!esItems.length) return enItems;
+  if (!enItems.length) return esItems.map(it => ({ ...it, ...asEs(it), _has: { ...it._has, i18n: true } }));
+  const used = new Set();
+  const byName = en => esItems.findIndex((es, k) => !used.has(k) && nameKey(es.name) === nameKey(en.name));
+  const matches = enItems.map(en => { const j = byName(en); if (j >= 0) used.add(j); return j; });
+  // Same number of candidates in both boxes: anything not matched by name pairs up by position.
+  if (enItems.length === esItems.length) matches.forEach((j, i) => { if (j < 0 && !used.has(i)) { matches[i] = i; used.add(i); } });
+  const orphans = esItems.filter((_, k) => !used.has(k)).map(x => x.name);
+  if (orphans.length) throw new Error(`These Spanish candidates have no English match: ${orphans.join(', ')}. Use the same names in both JSONs.`);
+  return enItems.map((en, i) => matches[i] < 0 ? en : { ...en, ...asEs(esItems[matches[i]]), _has: { ...en._has, i18n: true } });
+}
+
+// Same name (case/space/accent-insensitive) in this pipeline → update; otherwise create.
 export async function importCandidates(slug, imported, existing) {
-  const key = n => String(n || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const key = nameKey;
   let created = 0, updated = 0;
   for (const item of imported) {
     const { _has, ...data } = item;
@@ -268,6 +311,7 @@ export async function importCandidates(slug, imported, existing) {
       Object.keys(ALIASES).forEach(k => { if (_has[k] && k !== 'name' && k !== 'availability') merged[k] = data[k]; });
       merged.availability = { ...match.availability, ...data.availability }; // field by field
       if (!_has.resume || !data.resume) merged.resume = match.resume;
+      if (_has.i18n) merged.i18n = data.i18n; // re-importing English only keeps the existing Spanish notes
       const saved = await saveCandidate(merged, { isNew: false });
       Object.assign(match, saved);
       updated++;

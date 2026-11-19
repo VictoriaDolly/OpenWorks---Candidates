@@ -94,7 +94,25 @@ function bindOpen(el, onOpen) {
 }
 
 // ---------- Profile (everything except feedback, which the caller mounts in #profile-feedback) ----------
-export function profileHtml(c, { t, clientName = '', lang = 'en' }) {
+// Notes in the reader's language: the Spanish version (from the import) when the page is in ES,
+// field by field, falling back to the main (English) text when a field has no translation.
+function localizedNotes(c, lang) {
+  const tr = lang !== 'en' ? c.i18n?.[lang] : null;
+  if (!tr) return c;
+  return {
+    ...c,
+    screeningNotes: tr.screeningNotes?.length ? tr.screeningNotes : c.screeningNotes,
+    toConsider: tr.toConsider || c.toConsider,
+    additionalInfo: tr.additionalInfo || c.additionalInfo,
+    availability: { ...(c.availability || {}), ...(tr.availability || {}) },
+  };
+}
+
+// Fixed recommendation values are translated; anything else is shown as written.
+const REC_KEYS = { 'recommended to advance': 'recAdvance', 'advance with reservations': 'recReservations' };
+
+export function profileHtml(candidate, { t, clientName = '', lang = 'en' }) {
+  const c = localizedNotes(candidate, lang);
   const sections = [];
   const section = (title, body, cls = '') => `<section class="profile-section ${cls}"><h3>${e(title)}</h3>${body}</section>`;
 
@@ -120,7 +138,8 @@ export function profileHtml(c, { t, clientName = '', lang = 'en' }) {
   const rec = String(c.overallRecommendation || '').trim();
   if (rec) {
     const tone = /reservation/i.test(rec) ? 'is-amber' : 'is-green';
-    sections.push(section(t('secRecommendation'), `<span class="rec-badge ${tone}">✔️ ${e(rec)}</span>`));
+    const recKey = REC_KEYS[rec.toLowerCase()];
+    sections.push(section(t('secRecommendation'), `<span class="rec-badge ${tone}">✔️ ${e(recKey ? t(recKey) : rec)}</span>`));
   }
 
   const notes = (c.screeningNotes || []).map(n => String(n).trim()).filter(Boolean);

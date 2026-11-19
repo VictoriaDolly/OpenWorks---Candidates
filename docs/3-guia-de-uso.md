@@ -18,7 +18,7 @@
 
 **Presentar un candidato**
 1. En tu proyecto "OpenWorks Import Assistant" de Claude: adjuntá Highlights + Resume → copiá el JSON (ver `2-import-assistant.md`).
-2. Admin → pipeline → **Import from JSON** → pegar → **Import**.
+2. Admin → pipeline → **Import from JSON** → pegá el JSON en inglés en **English JSON** y el de español en **Spanish JSON** → **Import**. El cliente ve las notas en el idioma que elija (EN/ES).
 3. Click en el candidato → **Edit** → **Upload PDF** (el Resume) → **Save Candidate**.
 4. **Publish to Client Link**.
 5. Primera vez con ese cliente: **Copy Link + Password** y mandáselo.

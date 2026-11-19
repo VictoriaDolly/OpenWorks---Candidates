@@ -493,9 +493,10 @@ async function candidateForm(slug, id) {
   if (id && !existing) throw new Error('Candidate not found.');
   const c = existing ? structuredClone(existing) : {
     id: uuid(), pipelineSlug: slug, name: '', location: '', email: '', linkedin: '', status: STATUSES[0],
-    resume: null, overallRecommendation: RECOMMENDATIONS[0], screeningNotes: [], toConsider: '', additionalInfo: '', availability: {},
+    resume: null, overallRecommendation: RECOMMENDATIONS[0], screeningNotes: [], toConsider: '', additionalInfo: '', availability: {}, i18n: {},
   };
   const av = c.availability || {};
+  const es = c.i18n?.es || {};
   const avLabels = { motivation: 'Motivation to change', noticePeriod: 'Notice period', otherProcesses: 'Other hiring processes',
     vacationPlans: 'Vacation / migration plans', visaStatus: 'Visa status', salaryExpectations: 'Salary expectations' };
   const recOptions = [...RECOMMENDATIONS, ...(c.overallRecommendation && !RECOMMENDATIONS.includes(c.overallRecommendation) ? [c.overallRecommendation] : [])];
@@ -548,6 +549,17 @@ async function candidateForm(slug, id) {
         <legend>Availability &amp; Expectations</legend>
         <div class="grid-2">
           ${AVAILABILITY_FIELDS.map(k => `<label class="field"><span>${e(avLabels[k])}</span><input class="input" name="av_${k}" maxlength="500" value="${e(av[k] || '')}"></label>`).join('')}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Spanish version (optional)</legend>
+        <small class="muted">Shown when the client switches the page to ES. Leave a field empty to show the English text instead. Filled automatically by Import from JSON (Spanish box).</small>
+        <label class="field"><span>Screening Notes — ES (one bullet per line)</span><textarea class="input" name="es_screeningNotes" rows="6">${e((es.screeningNotes || []).join('\n'))}</textarea></label>
+        <label class="field"><span>To consider — ES</span><textarea class="input" name="es_toConsider" rows="3" maxlength="3000">${e(es.toConsider || '')}</textarea></label>
+        <label class="field"><span>Additional Information — ES</span><textarea class="input" name="es_additionalInfo" rows="6" style="resize:vertical;">${e(es.additionalInfo || '')}</textarea></label>
+        <div class="grid-2">
+          ${AVAILABILITY_FIELDS.map(k => `<label class="field"><span>${e(avLabels[k])} — ES</span><input class="input" name="es_av_${k}" maxlength="500" value="${e(es.availability?.[k] || '')}"></label>`).join('')}
         </div>
       </fieldset>
 
@@ -646,6 +658,12 @@ async function candidateForm(slug, id) {
       toConsider: form.toConsider.value.trim(),
       additionalInfo: form.additionalInfo.value.trim(),
       availability: Object.fromEntries(AVAILABILITY_FIELDS.map(k => [k, form[`av_${k}`].value.trim()])),
+      i18n: { es: {
+        screeningNotes: form.es_screeningNotes.value.split(/\r?\n/).map(l => l.replace(/^\s*[-•*·]\s*/, '').trim()).filter(Boolean),
+        toConsider: form.es_toConsider.value.trim(),
+        additionalInfo: form.es_additionalInfo.value.trim(),
+        availability: Object.fromEntries(AVAILABILITY_FIELDS.map(k => [k, form[`es_av_${k}`].value.trim()])),
+      } },
     };
     await busy(form.querySelector('[type="submit"]'), 'Saving…', async () => {
       const saved = await store.saveCandidate(data, { isNew: !existing });
@@ -670,19 +688,33 @@ async function importView(slug) {
     <div class="form">
       <div class="panel">
         <p style="margin-top:0">Paste the JSON from the <strong>Straydog Talent Import Assistant</strong> — one candidate or a list. A candidate with the same name in this pipeline is <strong>updated</strong>; otherwise a new one is <strong>created</strong>.</p>
+        <p style="margin-top:0">Paste the <strong>English</strong> JSON and the <strong>Spanish</strong> JSON in their boxes. The client sees the notes in the language they pick (EN/ES). Candidates are matched by name, so keep the same names in both.</p>
         <p class="muted" style="margin-bottom:0">Upload the Resume PDF afterwards from the candidate’s Edit form.</p>
       </div>
-      <textarea class="input code-area" id="json" spellcheck="false" placeholder='[{ "name": "…", "location": "…", "screeningNotes": ["…"] }]'></textarea>
+      <label class="field"><span>English JSON</span>
+        <textarea class="input code-area" id="json" spellcheck="false" placeholder='[{ "name": "…", "location": "…", "screeningNotes": ["…"] }]'></textarea>
+      </label>
+      <label class="field"><span>Spanish JSON <span class="muted" style="font-weight:400">(notes shown when the client picks ES)</span></span>
+        <textarea class="input code-area" id="json-es" spellcheck="false" placeholder='[{ "name": "…", "screeningNotes": ["…"], "toConsider": "…" }]'></textarea>
+      </label>
       <div class="form-actions">
         <a class="btn" href="${back}">Cancel</a>
         <button class="btn btn-primary" type="button" data-import>Import</button>
       </div>
     </div>`;
   const area = document.getElementById('json');
+  const areaEs = document.getElementById('json-es');
   area.focus();
   main().querySelector('[data-import]').onclick = async ev => {
     let items;
-    try { items = store.parseImport(area.value); }
+    try {
+      if (!area.value.trim() && !areaEs.value.trim()) throw new Error('Paste at least one JSON.');
+      const en = area.value.trim() ? store.parseImport(area.value) : [];
+      let es = [];
+      try { es = areaEs.value.trim() ? store.parseImport(areaEs.value) : []; }
+      catch (err) { throw new Error(`Spanish JSON: ${err.message}`); }
+      items = store.combineImports(en, es);
+    }
     catch (err) { return toast(err.message, 'error'); }
     await busy(ev.currentTarget, 'Importing…', async () => {
       const { created, updated } = await store.importCandidates(slug, items, cur.candidates);

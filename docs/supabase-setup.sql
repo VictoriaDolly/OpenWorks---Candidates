@@ -45,6 +45,7 @@ create table candidates (
   to_consider text,
   additional_info text,
   availability jsonb default '{}',
+  i18n jsonb default '{}', -- { "es": { screeningNotes, toConsider, additionalInfo, availability } }
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
