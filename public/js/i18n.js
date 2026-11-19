@@ -1,16 +1,16 @@
 import { storage } from './shared.js';
 
-// UI strings only. Stage names and candidate content are data and are never translated.
+// UI strings only. Stage names are stored in English (data); only their display label is translated (see tStatus in shared.js).
 const STRINGS = {
   en: {
     board: 'Board', list: 'List',
     noRefTitle: 'This link has no pipeline reference',
-    noRefBody: 'Please use the full link shared with you by OpenWorks.',
+    noRefBody: 'Please use the full link shared with you by Straydog Talent.',
     notFoundTitle: 'Pipeline not available',
     notFoundBody: "This link is invalid or hasn't been published yet.",
     loadError: "We couldn't load this pipeline. Please refresh and try again.",
     gateTitle: 'Protected pipeline',
-    gateBody: 'Enter the password OpenWorks shared with you.',
+    gateBody: 'Enter the password Straydog Talent shared with you.',
     password: 'Password', unlock: 'View candidates', checking: 'Checking…',
     wrongPassword: 'Incorrect password. Please try again.',
     candidatesOne: '1 candidate', candidatesMany: '{n} candidates',
@@ -33,16 +33,22 @@ const STRINGS = {
     fbSaved: 'Note saved', fbDeleted: 'Note deleted', fbError: 'Something went wrong. Please try again.',
     fbLoadError: "Feedback couldn't be loaded right now.", fbAnonymous: 'Anonymous',
     fbNotesOne: '1 note', fbNotesMany: '{n} notes',
+    candidates: 'Candidates', ariaLanguage: 'Language', ariaView: 'View',
+    stage_Submitted: 'Submitted',
+    stage_ClientInterviews: '{client} Interviews',
+    stage_OnHold: 'On-Hold',
+    stage_Offer: 'Offer',
+    stage_Rejected: 'Rejected',
   },
   es: {
     board: 'Tablero', list: 'Lista',
     noRefTitle: 'Este enlace no tiene referencia a un pipeline',
-    noRefBody: 'Usa el enlace completo que te compartió OpenWorks.',
+    noRefBody: 'Usa el enlace completo que te compartió Straydog Talent.',
     notFoundTitle: 'Pipeline no disponible',
     notFoundBody: 'El enlace no es válido o todavía no se ha publicado.',
     loadError: 'No pudimos cargar este pipeline. Actualiza la página e inténtalo de nuevo.',
     gateTitle: 'Pipeline protegido',
-    gateBody: 'Ingresa la contraseña que te compartió OpenWorks.',
+    gateBody: 'Ingresa la contraseña que te compartió Straydog Talent.',
     password: 'Contraseña', unlock: 'Ver candidatos', checking: 'Verificando…',
     wrongPassword: 'Contraseña incorrecta. Inténtalo de nuevo.',
     candidatesOne: '1 candidato', candidatesMany: '{n} candidatos',
@@ -65,6 +71,12 @@ const STRINGS = {
     fbSaved: 'Nota guardada', fbDeleted: 'Nota eliminada', fbError: 'Algo salió mal. Inténtalo de nuevo.',
     fbLoadError: 'No se pudo cargar el feedback en este momento.', fbAnonymous: 'Anónimo',
     fbNotesOne: '1 nota', fbNotesMany: '{n} notas',
+    candidates: 'Candidatos', ariaLanguage: 'Idioma', ariaView: 'Vista',
+    stage_Submitted: 'Presentados',
+    stage_ClientInterviews: 'Entrevistas {client}',
+    stage_OnHold: 'En Pausa',
+    stage_Offer: 'Oferta',
+    stage_Rejected: 'Descartados',
   },
 };
 

@@ -1,8 +1,8 @@
-// OpenWorks admin: pipelines, candidates, resumes, publishing and client feedback.
+// Straydog Talent admin: pipelines, candidates, resumes, publishing and client feedback.
 import { isSupabaseConfigured, siteUrl } from '../js/config.js';
 import {
   STATUSES, RECOMMENDATIONS, AVAILABILITY_FIELDS, escapeHtml as e, hashPassword, slugify,
-  randomToken, uuid, storage, safeUrl,
+  randomToken, uuid, storage, safeUrl, tStatus,
 } from '../js/shared.js';
 import { tEn as t } from '../js/i18n.js';
 import { renderBoard, profileHtml, openDrawer, closeDrawer, toast } from '../js/board.js';
@@ -61,7 +61,7 @@ function loginView(error = '') {
   app.innerHTML = `
     <main class="screen">
       <form class="screen-card" novalidate>
-        <img class="screen-logo" src="/assets/logo-color.png" alt="OpenWorks">
+        <div class="screen-logo-wrap"><img class="screen-logo" src="/assets/logo-straydog.jpg" alt="Straydog Talent"></div>
         <h1>Admin sign-in</h1>
         <p class="muted">We'll email you a one-time sign-in link.</p>
         <label class="sr-only" for="email">Email</label>
@@ -83,7 +83,7 @@ function loginView(error = '') {
     try {
       await auth.requestMagicLink(email);
       form.innerHTML = `
-        <img class="screen-logo" src="/assets/logo-color.png" alt="OpenWorks">
+        <div class="screen-logo-wrap"><img class="screen-logo" src="/assets/logo-straydog.jpg" alt="Straydog Talent"></div>
         <h1>Check your inbox</h1>
         <p class="muted">We sent a sign-in link to <strong>${e(email)}</strong>. Open it on this device to enter the admin.</p>
         <button class="btn-link" type="button" data-again>Use a different email</button>`;
@@ -101,7 +101,7 @@ function shell() {
   app.innerHTML = `
     <div class="admin-shell">
       <aside class="sidebar">
-        <a class="brand is-white side-brand" href="#/"><img src="/assets/mark-white.png" alt=""><span>OPENWORKS</span></a>
+        <a class="brand is-white side-brand" href="#/"><img src="/assets/mark-straydog.jpg" alt="Straydog Talent"><span>STRAYDOG TALENT</span></a>
         <button class="side-toggle" type="button" aria-expanded="false">Menu</button>
         <nav class="side-menu">
           <a href="#/" data-nav="all">All Pipelines</a>
@@ -335,7 +335,7 @@ function renderDetail() {
     if (ev.target.closest('[data-copy-both]')) {
       const pwNow = storage.get(pwKey(p.slug), sessionStorage);
       if (!pwNow) return toast('The password is hidden. Reset it via Edit Pipeline to copy it.', 'error');
-      return copy(`Candidates for ${p.roleTitle || p.clientName} — OpenWorks\nLink: ${url}\nPassword: ${pwNow}`, 'Link and password copied');
+      return copy(`Candidates for ${p.roleTitle || p.clientName} — Straydog Talent\nLink: ${url}\nPassword: ${pwNow}`, 'Link and password copied');
     }
     const pub = ev.target.closest('[data-publish]');
     if (pub) {
@@ -359,18 +359,58 @@ function renderDetailBoard() {
     el.innerHTML = `<div class="empty">No candidates yet. Use “+ Add Candidate” or “Import from JSON”.</div>`;
     return;
   }
-  renderBoard(el, candidates, { t, avgFor: id => feedback.avgFor(id), onOpen: openCandidate });
+  renderBoard(el, candidates, { t, avgFor: id => feedback.avgFor(id), onOpen: openCandidate, clientName: state.current.pipeline.clientName, lang: 'en' });
+  bindDragDrop(el);
+}
+
+// Drag a card onto another column to change its stage (desktop; the Stage select in the drawer still works everywhere).
+function bindDragDrop(el) {
+  el.querySelectorAll('.card').forEach(card => {
+    card.draggable = true;
+    card.addEventListener('dragstart', ev => {
+      ev.dataTransfer.setData('text/plain', card.dataset.id);
+      ev.dataTransfer.effectAllowed = 'move';
+      card.classList.add('is-dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+  });
+  el.querySelectorAll('.column').forEach(col => {
+    col.addEventListener('dragover', ev => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      col.classList.add('drag-over');
+    });
+    col.addEventListener('dragleave', ev => {
+      if (!col.contains(ev.relatedTarget)) col.classList.remove('drag-over');
+    });
+    col.addEventListener('drop', async ev => {
+      ev.preventDefault();
+      col.classList.remove('drag-over');
+      const id = ev.dataTransfer.getData('text/plain');
+      const newStatus = col.dataset.status;
+      const cur = state.current;
+      const c = cur?.candidates.find(x => x.id === id);
+      if (!c || !newStatus || c.status === newStatus) return;
+      col.style.opacity = '.6';
+      try {
+        const saved = await store.setCandidateStatus(id, newStatus);
+        Object.assign(c, saved);
+        toast(`Moved to ${tStatus(saved.status, cur.pipeline.clientName, 'en')} — Publish to update the client link`);
+      } catch (err) { handleError(err); }
+      if (state.current === cur) renderDetailBoard();
+    });
+  });
 }
 
 function openCandidate(id) {
   const cur = state.current;
   const c = cur.candidates.find(x => x.id === id);
   if (!c) return;
-  const content = openDrawer(profileHtml(c, { t }), { closeLabel: 'Close' });
+  const content = openDrawer(profileHtml(c, { t, clientName: cur.pipeline.clientName, lang: 'en' }), { closeLabel: 'Close' });
   content.querySelector('#profile-extra').innerHTML = `
     <div class="stage-select">
       <label for="stage"><strong>Stage</strong></label>
-      <select class="input" id="stage">${STATUSES.map(s => `<option${s === c.status ? ' selected' : ''}>${e(s)}</option>`).join('')}</select>
+      <select class="input" id="stage">${STATUSES.map(s => `<option value="${e(s)}"${s === c.status ? ' selected' : ''}>${e(tStatus(s, cur.pipeline.clientName, 'en'))}</option>`).join('')}</select>
       <a class="btn btn-small" href="#/p/${encodeURIComponent(c.pipelineSlug)}/candidate/${encodeURIComponent(c.id)}">Edit</a>
       <button class="btn btn-small btn-danger" type="button" data-del>Delete</button>
     </div>`;
@@ -380,7 +420,7 @@ function openCandidate(id) {
     try {
       const saved = await store.setCandidateStatus(c.id, select.value);
       Object.assign(c, saved);
-      toast(`Moved to ${saved.status} — Publish to update the client link`);
+      toast(`Moved to ${tStatus(saved.status, cur.pipeline.clientName, 'en')} — Publish to update the client link`);
       renderDetailBoard();
       openCandidate(c.id);
     } catch (err) { handleError(err); select.value = c.status; }
@@ -430,7 +470,7 @@ async function candidateForm(slug, id) {
           <label class="field"><span>LinkedIn</span><input class="input" name="linkedin" maxlength="300" value="${e(c.linkedin)}" placeholder="https://www.linkedin.com/in/…"></label>
         </div>
         <label class="field"><span>Status</span>
-          <select class="input" name="status">${STATUSES.map(s => `<option${s === c.status ? ' selected' : ''}>${e(s)}</option>`).join('')}</select>
+          <select class="input" name="status">${STATUSES.map(s => `<option value="${e(s)}"${s === c.status ? ' selected' : ''}>${e(tStatus(s, cur.pipeline.clientName, 'en'))}</option>`).join('')}</select>
         </label>
       </fieldset>
 
@@ -583,7 +623,7 @@ async function importView(slug) {
     </div>
     <div class="form">
       <div class="panel">
-        <p style="margin-top:0">Paste the JSON from the <strong>OpenWorks Import Assistant</strong> — one candidate or a list. A candidate with the same name in this pipeline is <strong>updated</strong>; otherwise a new one is <strong>created</strong>.</p>
+        <p style="margin-top:0">Paste the JSON from the <strong>Straydog Talent Import Assistant</strong> — one candidate or a list. A candidate with the same name in this pipeline is <strong>updated</strong>; otherwise a new one is <strong>created</strong>.</p>
         <p class="muted" style="margin-bottom:0">Upload the Resume PDF afterwards from the candidate’s Edit form.</p>
       </div>
       <textarea class="input code-area" id="json" spellcheck="false" placeholder='[{ "name": "…", "location": "…", "screeningNotes": ["…"] }]'></textarea>
@@ -611,7 +651,7 @@ async function start() {
   if (!isSupabaseConfigured()) {
     app.innerHTML = `
       <main class="screen"><div class="screen-card">
-        <img class="screen-logo" src="/assets/logo-color.png" alt="OpenWorks">
+        <div class="screen-logo-wrap"><img class="screen-logo" src="/assets/logo-straydog.jpg" alt="Straydog Talent"></div>
         <h1>Supabase isn’t connected yet</h1>
         <p class="muted">Add SUPABASE_URL and SUPABASE_ANON_KEY in <code>js/config.js</code>.</p>
       </div></main>`;

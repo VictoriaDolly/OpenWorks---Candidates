@@ -14,6 +14,25 @@ export function normalizeStatus(status) {
   return STATUSES.find(x => x.toLowerCase() === s) || STATUSES[0];
 }
 
+// Display label for a stage — translates for ES and substitutes client name.
+// The stored value (data) is always the English key from STATUSES.
+export function tStatus(status, clientName, lang) {
+  const client = clientName || 'Client';
+  if (lang === 'es') {
+    const map = {
+      'Submitted': 'Presentados',
+      'Client Interviews': `Entrevistas ${client}`,
+      'On-Hold': 'En Pausa',
+      'Offer': 'Oferta',
+      'Rejected': 'Descartados',
+    };
+    return map[status] || status;
+  }
+  // English: substitute client name in "Client Interviews"
+  if (status === 'Client Interviews') return `${client} Interviews`;
+  return status;
+}
+
 // List order: most advanced first, Rejected always last.
 export function sortForList(candidates) {
   const rank = s => (s === TERMINAL_STATUS ? -1 : STATUSES.indexOf(s));

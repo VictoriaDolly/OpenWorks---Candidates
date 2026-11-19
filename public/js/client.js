@@ -33,7 +33,7 @@ const state = {
 
 // ---------- Shared bits ----------
 const langToggle = () => `
-  <div class="seg" role="group" aria-label="Language">
+  <div class="seg" role="group" aria-label="${e(t('ariaLanguage'))}">
     <button type="button" data-lang="en" class="${getLang() === 'en' ? 'is-active' : ''}">EN</button>
     <button type="button" data-lang="es" class="${getLang() === 'es' ? 'is-active' : ''}">ES</button>
   </div>`;
@@ -43,7 +43,7 @@ function messageScreen(title, body) {
   app.innerHTML = `
     <main class="screen">
       <div class="screen-card">
-        <img class="screen-logo" src="/assets/logo-color.png" alt="OpenWorks">
+        <div class="screen-logo-wrap"><img class="screen-logo" src="/assets/logo-straydog.jpg" alt="Straydog Talent"></div>
         <h1>${e(t(title))}</h1>
         ${body ? `<p class="muted">${e(t(body))}</p>` : ''}
         <div class="screen-lang">${langToggle()}</div>
@@ -56,7 +56,7 @@ function gateScreen(error = '') {
   app.innerHTML = `
     <main class="screen">
       <form class="screen-card gate" novalidate>
-        <img class="screen-logo" src="/assets/logo-color.png" alt="OpenWorks">
+        <div class="screen-logo-wrap"><img class="screen-logo" src="/assets/logo-straydog.jpg" alt="Straydog Talent"></div>
         <h1>${e(t('gateTitle'))}</h1>
         <p class="muted">${e(t('gateBody'))}</p>
         <label class="sr-only" for="pw">${e(t('password'))}</label>
@@ -93,7 +93,6 @@ function showPipeline(hash, pipeline) {
   state.hash = hash;
   state.pipeline = pipeline;
   pipeline.candidates = (pipeline.candidates || []).map(c => ({ ...c, status: normalizeStatus(c.status) }));
-  document.title = `${pipeline.clientName} · ${pipeline.roleTitle || 'Candidates'} · OpenWorks`;
   if (isSupabaseConfigured()) {
     state.feedback = new FeedbackModel(clientAdapter({ slug, hash }));
     state.feedback.subscribe(renderView); // averages on cards/list follow new notes
@@ -106,11 +105,13 @@ function dashboardScreen() {
   state.screen = dashboardScreen;
   const p = state.pipeline;
   const n = p.candidates.length;
+  // Set here (not in showPipeline) so it follows language changes.
+  document.title = `${p.clientName} · ${p.roleTitle || t('candidates')} · Straydog Talent`;
   app.innerHTML = `
     <header class="topbar">
-      <span class="brand"><img src="/assets/mark-color.png" alt=""><span>OPENWORKS</span></span>
+      <span class="brand"><img src="/assets/mark-straydog.jpg" alt="Straydog Talent"><span>STRAYDOG TALENT</span></span>
       <div class="topbar-controls">
-        <div class="seg" role="group" aria-label="View">
+        <div class="seg" role="group" aria-label="${e(t('ariaView'))}">
           <button type="button" data-view="board" class="${state.view === 'board' ? 'is-active' : ''}">${e(t('board'))}</button>
           <button type="button" data-view="list" class="${state.view === 'list' ? 'is-active' : ''}">${e(t('list'))}</button>
         </div>
@@ -134,7 +135,7 @@ function renderView() {
   if (!el) return;
   const p = state.pipeline;
   if (!p.candidates.length) { el.innerHTML = `<div class="empty">${e(t('emptyPipeline'))}</div>`; return; }
-  const opts = { t, onOpen: openProfile, avgFor: id => state.feedback?.avgFor(id) ?? null };
+  const opts = { t, onOpen: openProfile, avgFor: id => state.feedback?.avgFor(id) ?? null, clientName: p.clientName, lang: getLang() };
   state.view === 'list' ? renderList(el, p.candidates, opts) : renderBoard(el, p.candidates, opts);
 }
 
@@ -142,7 +143,7 @@ function openProfile(id) {
   const c = state.pipeline.candidates.find(x => x.id === id);
   if (!c) return;
   state.openId = id;
-  const content = openDrawer(profileHtml(c, { t }), { closeLabel: t('close'), onClose: () => { state.openId = null; } });
+  const content = openDrawer(profileHtml(c, { t, clientName: state.pipeline.clientName, lang: getLang() }),{ closeLabel: t('close'), onClose: () => { state.openId = null; } });
   if (state.feedback) mountFeedback(content.querySelector('#profile-feedback'), state.feedback, c, { t, locale: getLang() });
 }
 

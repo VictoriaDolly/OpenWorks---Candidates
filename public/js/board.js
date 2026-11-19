@@ -2,7 +2,7 @@
 // Used by both the client dashboard and the admin. All data goes through escapeHtml.
 import {
   STATUSES, TERMINAL_STATUS, AVAILABILITY_FIELDS, normalizeStatus, sortForList,
-  escapeHtml as e, initials, safeUrl, roundScore, formatAvg,
+  escapeHtml as e, initials, safeUrl, roundScore, formatAvg, tStatus,
 } from './shared.js';
 
 // ---------- Small pieces ----------
@@ -13,9 +13,10 @@ export function scorePill(avg, t, { withLabel = false } = {}) {
   return `<span class="score-pill score-${r}" title="${e(t('avgScore'))}: ${e(formatAvg(avg))} · ${e(t('score_' + r))}">${e(text)}</span>`;
 }
 
-export function statusPill(status) {
+// data-status keeps the English data key; the visible label is translated / client-specific.
+export function statusPill(status, { clientName = '', lang = 'en' } = {}) {
   const s = normalizeStatus(status);
-  return `<span class="status-pill${s === TERMINAL_STATUS ? ' is-terminal' : ''}">${e(s)}</span>`;
+  return `<span class="status-pill${s === TERMINAL_STATUS ? ' is-terminal' : ''}" data-status="${e(s)}">${e(tStatus(s, clientName, lang))}</span>`;
 }
 
 const avatar = name => `<span class="avatar" aria-hidden="true">${e(initials(name))}</span>`;
@@ -41,12 +42,12 @@ export function cardHtml(c, { avg, t }) {
 }
 
 // ---------- Board ----------
-export function renderBoard(el, candidates, { avgFor = () => null, t, onOpen }) {
+export function renderBoard(el, candidates, { avgFor = () => null, t, onOpen, clientName = '', lang = 'en' }) {
   const groups = Object.fromEntries(STATUSES.map(s => [s, []]));
   candidates.forEach(c => groups[normalizeStatus(c.status)].push(c));
   el.innerHTML = `<div class="board">${STATUSES.map(s => `
-    <section class="column${s === TERMINAL_STATUS ? ' is-terminal' : ''}">
-      <header class="column-head"><span class="status-pill${s === TERMINAL_STATUS ? ' is-terminal' : ''}">${e(s)}</span><span class="column-count">${groups[s].length}</span></header>
+    <section class="column${s === TERMINAL_STATUS ? ' is-terminal' : ''}" data-status="${e(s)}">
+      <header class="column-head">${statusPill(s, { clientName, lang })}<span class="column-count">${groups[s].length}</span></header>
       <div class="column-body">
         ${groups[s].map(c => cardHtml(c, { avg: avgFor(c.id), t })).join('') || `<p class="column-empty">${e(t('emptyColumn'))}</p>`}
       </div>
@@ -55,7 +56,7 @@ export function renderBoard(el, candidates, { avgFor = () => null, t, onOpen }) 
 }
 
 // ---------- List ----------
-export function renderList(el, candidates, { avgFor = () => null, t, onOpen }) {
+export function renderList(el, candidates, { avgFor = () => null, t, onOpen, clientName = '', lang = 'en' }) {
   const rows = sortForList(candidates).map(c => {
     const s = normalizeStatus(c.status);
     const avg = avgFor(c.id);
@@ -63,7 +64,7 @@ export function renderList(el, candidates, { avgFor = () => null, t, onOpen }) {
       <tr class="list-row${s === TERMINAL_STATUS ? ' is-terminal' : ''}" data-id="${e(c.id)}" tabindex="0" role="button">
         <td><div class="list-candidate">${avatar(c.name)}<span>${e(c.name)}</span></div></td>
         <td class="col-location">${e(c.location || '—')}</td>
-        <td>${statusPill(s)}</td>
+        <td>${statusPill(s, { clientName, lang })}</td>
         <td class="col-avg">${avg == null ? '<span class="muted">—</span>' : scorePill(avg, t, { withLabel: true })}</td>
       </tr>`;
   }).join('');
@@ -93,7 +94,7 @@ function bindOpen(el, onOpen) {
 }
 
 // ---------- Profile (everything except feedback, which the caller mounts in #profile-feedback) ----------
-export function profileHtml(c, { t }) {
+export function profileHtml(c, { t, clientName = '', lang = 'en' }) {
   const sections = [];
   const section = (title, body, cls = '') => `<section class="profile-section ${cls}"><h3>${e(title)}</h3>${body}</section>`;
 
@@ -145,7 +146,7 @@ export function profileHtml(c, { t }) {
       ${avatar(c.name)}
       <div>
         <h2>${e(c.name)}</h2>
-        <div class="profile-sub">${c.location ? `<span>${e(c.location)}</span>` : ''}${statusPill(c.status)}</div>
+        <div class="profile-sub">${c.location ? `<span>${e(c.location)}</span>` : ''}${statusPill(c.status, { clientName, lang })}</div>
       </div>
     </div>
     <div class="profile-extra" id="profile-extra"></div>
