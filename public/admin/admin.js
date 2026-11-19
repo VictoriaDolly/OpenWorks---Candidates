@@ -176,10 +176,11 @@ async function listView() {
       <td><strong><a href="#/p/${encodeURIComponent(p.slug)}">${e(p.clientName)}</a></strong><small>${e(p.slug)}</small></td>
       <td>${e(p.roleTitle || '—')}</td>
       <td>${p.candidateCount}</td>
-      <td>${fmtDate(p.updatedAt)}${p.publishedAt ? '' : '<small>Not published</small>'}</td>
+      <td>${fmtDate(p.updatedAt)}${p.frozenAt ? '<small><span class="badge badge-frozen">Frozen</span></small>' : (p.publishedAt ? '' : '<small>Not published</small>')}</td>
       <td><div class="actions">
         <button class="btn btn-small" data-copy="${e(p.slug)}">Copy Link</button>
         <a class="btn btn-small" href="#/p/${encodeURIComponent(p.slug)}">Open</a>
+        <button class="btn btn-small" data-freeze="${e(p.slug)}">${p.frozenAt ? 'Unfreeze' : 'Freeze'}</button>
         <button class="btn btn-small btn-danger" data-delete="${e(p.slug)}">Delete</button>
       </div></td>
     </tr>`).join('');
@@ -196,18 +197,49 @@ async function listView() {
   main().onclick = async ev => {
     const c = ev.target.closest('[data-copy]');
     if (c) return copy(clientUrl(c.dataset.copy), 'Link copied');
+    const f = ev.target.closest('[data-freeze]');
+    if (f) {
+      const p = state.pipelines.find(x => x.slug === f.dataset.freeze);
+      if (await toggleFreeze(f, p)) await listView();
+      return;
+    }
     const d = ev.target.closest('[data-delete]');
     if (d) {
       const p = state.pipelines.find(x => x.slug === d.dataset.delete);
-      if (!confirm(`Delete “${p.clientName} — ${p.roleTitle}”?\n\nThis permanently removes its candidates, resumes and client feedback. The client link will stop working.`)) return;
-      await busy(d, 'Deleting…', async () => {
-        await store.deletePipeline(p.slug);
-        if (state.current?.pipeline.slug === p.slug) state.current = null;
-        toast('Pipeline deleted');
-        await listView();
-      });
+      if (await deletePipelineFlow(d, p)) await listView();
     }
   };
+}
+
+// ---------- Freeze / delete (used by the list and the detail page) ----------
+async function toggleFreeze(btn, p) {
+  const freezing = !p.frozenAt;
+  const msg = freezing
+    ? `Freeze “${p.clientName}${p.roleTitle ? ` — ${p.roleTitle}` : ''}”?\n\nThe client link stops working right away and looks like it doesn't exist. Nothing is deleted — you can unfreeze it later.`
+    : `Unfreeze “${p.clientName}${p.roleTitle ? ` — ${p.roleTitle}` : ''}”?\n\nThe client link works again with the same password.`;
+  if (!confirm(msg)) return false;
+  let ok = false;
+  await busy(btn, freezing ? 'Freezing…' : 'Unfreezing…', async () => {
+    const saved = await store.setFrozen(p.slug, freezing);
+    p.frozenAt = saved.frozenAt;
+    if (state.current?.pipeline.slug === p.slug) state.current.pipeline.frozenAt = saved.frozenAt;
+    toast(freezing ? 'Frozen — the client link is disabled' : 'Unfrozen — the client link works again');
+    ok = true;
+  });
+  return ok;
+}
+
+async function deletePipelineFlow(btn, p) {
+  if (!confirm(`Delete “${p.clientName}${p.roleTitle ? ` — ${p.roleTitle}` : ''}”?\n\nThis permanently removes its candidates, resumes and client feedback. The client link will stop working. This cannot be undone.`)) return false;
+  let ok = false;
+  await busy(btn, 'Deleting…', async () => {
+    await store.deletePipeline(p.slug);
+    if (state.current?.pipeline.slug === p.slug) state.current = null;
+    state.pipelines = state.pipelines.filter(x => x.slug !== p.slug);
+    toast('Pipeline deleted');
+    ok = true;
+  });
+  return ok;
 }
 
 // ---------- New / edit pipeline ----------
@@ -295,6 +327,7 @@ async function detailView(slug) {
 
 function publishBadge() {
   const { pipeline, candidates } = state.current;
+  if (pipeline.frozenAt) return '<span class="badge badge-frozen">Frozen — client link disabled</span>';
   if (!pipeline.publishedAt) return '<span class="badge badge-muted">Not published yet</span>';
   if (store.hasUnpublishedChanges(pipeline, candidates)) return `<span class="badge badge-warn">Unpublished changes</span>`;
   return `<span class="badge badge-ok">Published · ${e(fmtDateTime(pipeline.publishedAt))}</span>`;
@@ -316,8 +349,11 @@ function renderDetail() {
         <button class="btn btn-primary" data-publish>Publish to Client Link</button>
         <a class="btn" href="${base}/import">Import from JSON</a>
         <a class="btn" href="${base}/candidate/new">+ Add Candidate</a>
+        <button class="btn" data-freeze>${p.frozenAt ? 'Unfreeze Link' : 'Freeze Link'}</button>
+        <button class="btn btn-danger" data-delete>Delete Pipeline</button>
       </div>
     </div>
+    ${p.frozenAt ? `<div class="frozen-note">❄ Frozen since ${e(fmtDateTime(p.frozenAt))}. The client link shows “not available” — no branding, no candidates, no feedback. Unfreeze to turn it back on.</div>` : ''}
     <div class="link-box">
       <div class="row"><span class="label">Link</span><a href="${e(url)}" target="_blank" rel="noopener">${e(url)}</a></div>
       <div class="row"><span class="label">Password</span>${pw ? `<code>${e(pw)}</code>` : '<span class="muted">hidden — reset via Edit Pipeline</span>'}</div>
@@ -336,6 +372,16 @@ function renderDetail() {
       const pwNow = storage.get(pwKey(p.slug), sessionStorage);
       if (!pwNow) return toast('The password is hidden. Reset it via Edit Pipeline to copy it.', 'error');
       return copy(`Candidates for ${p.roleTitle || p.clientName} — Straydog Talent\nLink: ${url}\nPassword: ${pwNow}`, 'Link and password copied');
+    }
+    const fr = ev.target.closest('[data-freeze]');
+    if (fr) {
+      if (await toggleFreeze(fr, state.current.pipeline)) { await refreshPipelines(); renderSidebar(p.slug); renderDetail(); }
+      return;
+    }
+    const del = ev.target.closest('[data-delete]');
+    if (del) {
+      if (await deletePipelineFlow(del, state.current.pipeline)) go('#/');
+      return;
     }
     const pub = ev.target.closest('[data-publish]');
     if (pub) {

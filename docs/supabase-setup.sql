@@ -25,6 +25,7 @@ create table pipelines (
   salt text not null,
   published_snapshot jsonb,
   published_at timestamptz,
+  frozen_at timestamptz, -- set = client link disabled (looks like it doesn't exist)
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -96,19 +97,19 @@ create policy "admins delete feedback" on feedback for delete to authenticated u
 -- Salt is not secret: the browser needs it to hash the password the client types.
 create or replace function pipeline_salt(p_slug text) returns text
 language sql stable security definer set search_path = public as $$
-  select salt from pipelines where slug = p_slug and published_at is not null;
+  select salt from pipelines where slug = p_slug and published_at is not null and frozen_at is null;
 $$;
 
 -- Returns the published snapshot only when the password hash matches (otherwise null).
 create or replace function get_pipeline(p_slug text, p_hash text) returns jsonb
 language sql stable security definer set search_path = public as $$
   select published_snapshot from pipelines
-  where slug = p_slug and published_at is not null and password_hash = p_hash;
+  where slug = p_slug and published_at is not null and frozen_at is null and password_hash = p_hash;
 $$;
 
 create or replace function pipeline_unlocked(p_slug text, p_hash text) returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from pipelines where slug = p_slug and published_at is not null and password_hash = p_hash);
+  select exists (select 1 from pipelines where slug = p_slug and published_at is not null and frozen_at is null and password_hash = p_hash);
 $$;
 
 -- Notes for a pipeline. "mine" tells the browser which notes it may delete (browser ids stay private).

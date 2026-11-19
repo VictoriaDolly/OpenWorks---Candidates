@@ -51,6 +51,21 @@ function messageScreen(title, body) {
     </main>`;
 }
 
+// Unknown, unpublished or frozen link: a bare page with no branding (looks like the link doesn't exist).
+function unavailableScreen() {
+  state.screen = unavailableScreen;
+  document.body.classList.add('is-plain');
+  document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]').forEach(l => l.remove());
+  document.title = t('notFoundTitle');
+  app.innerHTML = `
+    <main class="screen">
+      <div class="screen-plain">
+        <h1>${e(t('notFoundTitle'))}</h1>
+        <p>${e(t('notFoundBody'))}</p>
+      </div>
+    </main>`;
+}
+
 function gateScreen(error = '') {
   state.screen = () => gateScreen(error);
   app.innerHTML = `
@@ -172,7 +187,7 @@ async function start() {
   if (!slug) return messageScreen('noRefTitle', 'noRefBody');
   try {
     state.salt = await api.salt(slug);
-    if (!state.salt) return messageScreen('notFoundTitle', 'notFoundBody');
+    if (!state.salt) return unavailableScreen();
     const saved = storage.get(unlockKey, sessionStorage);
     if (saved) {
       const pipeline = await api.pipeline(slug, saved);

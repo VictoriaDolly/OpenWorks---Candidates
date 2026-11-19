@@ -40,7 +40,7 @@ window.fetch = async (input, init = {}) => {
   if (path.startsWith('rest/v1/rpc/')) {
     const fn = path.slice('rest/v1/rpc/'.length);
     if (fn === 'is_admin') return json(isAdmin);
-    const p = db.pipelines.find(x => x.slug === body.p_slug && x.published_at);
+    const p = db.pipelines.find(x => x.slug === body.p_slug && x.published_at && !x.frozen_at);
     const ok = p && p.password_hash === body.p_hash;
     const view = f => ({ id: f.id, candidate_id: f.candidate_id, stage: f.stage, author: f.author, body: f.body, score: f.score, created_at: f.created_at, mine: !!f.browser_id && f.browser_id === body.p_browser_id });
     if (fn === 'pipeline_salt') return json(p ? p.salt : null);

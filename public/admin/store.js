@@ -14,7 +14,7 @@ const RETURN = { Prefer: 'return=representation' };
 // ---------- Mapping DB rows ⇄ app objects ----------
 const toPipeline = r => ({
   slug: r.slug, clientName: r.client_name, roleTitle: r.role_title || '',
-  publishedSnapshot: r.published_snapshot, publishedAt: r.published_at,
+  publishedSnapshot: r.published_snapshot, publishedAt: r.published_at, frozenAt: r.frozen_at || null,
   createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
@@ -50,7 +50,7 @@ function cleanAvailability(av = {}) {
 // ---------- Pipelines ----------
 export async function listPipelines() {
   const [rows, cands] = await Promise.all([
-    req('rest/v1/pipelines?select=slug,client_name,role_title,published_at,created_at,updated_at&order=updated_at.desc'),
+    req('rest/v1/pipelines?select=slug,client_name,role_title,published_at,frozen_at,created_at,updated_at&order=updated_at.desc'),
     req('rest/v1/candidates?select=pipeline_slug'),
   ]);
   const counts = {};
@@ -75,6 +75,14 @@ export async function updatePipeline(slug, { clientName, roleTitle, passwordHash
   const body = { client_name: clientName, role_title: roleTitle || null };
   if (passwordHash) Object.assign(body, { password_hash: passwordHash, salt });
   const rows = await req(`rest/v1/pipelines?slug=eq.${enc(slug)}`, { method: 'PATCH', headers: RETURN, body });
+  return toPipeline(rows[0]);
+}
+
+// Frozen = the client link stops working (it looks like it doesn't exist). Nothing is deleted.
+export async function setFrozen(slug, frozen) {
+  const rows = await req(`rest/v1/pipelines?slug=eq.${enc(slug)}`, {
+    method: 'PATCH', headers: RETURN, body: { frozen_at: frozen ? new Date().toISOString() : null },
+  });
   return toPipeline(rows[0]);
 }
 
