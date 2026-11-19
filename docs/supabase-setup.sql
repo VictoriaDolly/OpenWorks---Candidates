@@ -9,7 +9,8 @@ create table admins (
   email text primary key,
   added_at timestamptz default now()
 );
-insert into admins (email) values (lower('danvicmed@gmail.com'));
+-- ⚠️ Replace with YOUR admin email before running:
+insert into admins (email) values (lower('TU-EMAIL@ejemplo.com'));
 
 create or replace function is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
